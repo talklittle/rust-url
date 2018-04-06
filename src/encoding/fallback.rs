@@ -30,7 +30,7 @@ impl EncodingOverride for EncodingOverrideFallback {
         Self {}
     }
 
-    fn lookup(label: &[u8]) -> Option<Self> {
+    fn lookup(_label: &[u8]) -> Option<Self> {
         // always return `None` which means UTF-8
         None
     }
