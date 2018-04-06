@@ -221,6 +221,7 @@ impl<'a> ParseOptions<'a> {
     /// This method is only available if the `query_encoding`
     /// [feature](http://doc.crates.io/manifest.html#the-features-section]) is enabled.
     #[cfg(feature = "query_encoding")]
+    #[deprecated(note="Build with `query_encoding_2` instead")]
     pub fn encoding_override(mut self, new: Option<encoding::EncodingRef>) -> Self {
         self.encoding_override = Rc::new(EncodingOverrideLegacy::from_opt_encoding(new).to_output_encoding());
         self

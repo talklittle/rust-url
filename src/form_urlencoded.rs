@@ -78,6 +78,7 @@ pub fn parse_with_encoding_label<'a>(input: &'a [u8],
 ///    `EncodingRef` is defined in [rust-encoding](https://github.com/lifthrasiir/rust-encoding).
 /// * `use_charset`: The *use _charset_ flag*. If in doubt, set to `false`.
 #[cfg(feature = "query_encoding")]
+#[deprecated(note="Build with `query_encoding_2` instead")]
 pub fn parse_with_encoding<'a>(input: &'a [u8],
                                encoding_override: Option<::encoding::EncodingRef>,
                                use_charset: bool)
@@ -339,6 +340,7 @@ impl<T: Target> Serializer<T> {
 
     /// Set the character encoding to be used for names and values before percent-encoding.
     #[cfg(feature = "query_encoding")]
+    #[deprecated(note="Build with `query_encoding_2` instead")]
     pub fn encoding_override(&mut self, new: Option<::encoding::EncodingRef>) -> &mut Self {
         self.encoding = Rc::new(EncodingOverrideLegacy::from_opt_encoding(new).to_output_encoding());
         self
