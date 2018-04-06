@@ -19,6 +19,7 @@ use encoding::default_encoding_override;
 use percent_encoding::{percent_encode_byte, percent_decode};
 use std::borrow::{Borrow, Cow};
 use std::fmt;
+use std::rc::Rc;
 use std::str;
 
 
@@ -33,7 +34,7 @@ use std::str;
 pub fn parse(input: &[u8]) -> Parse {
     Parse {
         input: input,
-        encoding: &default_encoding_override(),
+        encoding: Rc::new(default_encoding_override()),
     }
 }
 
@@ -79,7 +80,7 @@ pub fn parse_with_encoding<'a>(input: &'a [u8],
     }
     Ok(Parse {
         input: input,
-        encoding: &encoding,
+        encoding: Rc::new(encoding),
     })
 }
 
@@ -87,7 +88,7 @@ pub fn parse_with_encoding<'a>(input: &'a [u8],
 #[derive(Clone, Debug)]
 pub struct Parse<'a> {
     input: &'a [u8],
-    encoding: &'a EncodingOverride,
+    encoding: Rc<EncodingOverride>,
 }
 
 impl<'a> Iterator for Parse<'a> {
@@ -108,8 +109,8 @@ impl<'a> Iterator for Parse<'a> {
             let name = split2.next().unwrap();
             let value = split2.next().unwrap_or(&[][..]);
             return Some((
-                decode(name, self.encoding),
-                decode(value, self.encoding),
+                decode(name, &*self.encoding),
+                decode(value, &*self.encoding),
             ))
         }
     }
@@ -215,10 +216,10 @@ impl<'a> Iterator for ByteSerialize<'a> {
 /// The [`application/x-www-form-urlencoded` serializer](
 /// https://url.spec.whatwg.org/#concept-urlencoded-serializer).
 #[derive(Debug)]
-pub struct Serializer<'a, T: Target> {
+pub struct Serializer<T: Target> {
     target: Option<T>,
     start_position: usize,
-    encoding: &'a EncodingOverride,
+    encoding: Rc<EncodingOverride>,
     custom_encoding: Option<SilentDebug<Box<FnMut(&str) -> Cow<[u8]>>>>,
 }
 
@@ -264,7 +265,7 @@ impl<'a> Target for ::UrlQuery<'a> {
     type Finished = &'a mut ::Url;
 }
 
-impl<'a, T: Target> Serializer<'a, T> {
+impl<T: Target> Serializer<T> {
     /// Create a new `application/x-www-form-urlencoded` serializer for the given target.
     ///
     /// If the target is non-empty,
@@ -283,7 +284,7 @@ impl<'a, T: Target> Serializer<'a, T> {
         Serializer {
             target: Some(target),
             start_position: start_position,
-            encoding: &default_encoding_override(),
+            encoding: Rc::new(default_encoding_override()),
             custom_encoding: None,
         }
     }
@@ -299,7 +300,7 @@ impl<'a, T: Target> Serializer<'a, T> {
     /// Set the character encoding to be used for names and values before percent-encoding.
     #[cfg(feature = "query_encoding")]
     pub fn encoding_override(&mut self, new: Option<::encoding::EncodingRef>) -> &mut Self {
-        self.encoding = &EncodingOverrideLegacy::from_opt_encoding(new).to_output_encoding();
+        self.encoding = Rc::new(EncodingOverrideLegacy::from_opt_encoding(new).to_output_encoding());
         self
     }
 
@@ -315,7 +316,7 @@ impl<'a, T: Target> Serializer<'a, T> {
     ///
     /// Panics if called after `.finish()`.
     pub fn append_pair(&mut self, name: &str, value: &str) -> &mut Self {
-        append_pair(string(&mut self.target), self.start_position, self.encoding,
+        append_pair(string(&mut self.target), self.start_position, &*self.encoding,
                     &mut self.custom_encoding, name, value);
         self
     }
@@ -333,7 +334,7 @@ impl<'a, T: Target> Serializer<'a, T> {
             let string = string(&mut self.target);
             for pair in iter {
                 let &(ref k, ref v) = pair.borrow();
-                append_pair(string, self.start_position, self.encoding,
+                append_pair(string, self.start_position, &*self.encoding,
                             &mut self.custom_encoding, k.as_ref(), v.as_ref());
             }
         }
