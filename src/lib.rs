@@ -116,6 +116,7 @@ pub extern crate percent_encoding;
 
 use encoding::EncodingOverride;
 use encoding::default_encoding_override;
+#[cfg(any(feature = "query_encoding", feature = "query_encoding_2"))] use encoding::encoding_override_for_label;
 #[cfg(feature = "query_encoding")] use encoding::EncodingOverrideLegacy;
 #[cfg(feature = "heapsize")] use heapsize::HeapSizeOf;
 use host::HostInternal;
@@ -196,6 +197,19 @@ impl<'a> ParseOptions<'a> {
     /// Change the base URL
     pub fn base_url(mut self, new: Option<&'a Url>) -> Self {
         self.base_url = new;
+        self
+    }
+
+    /// Override the character encoding of query strings.
+    /// This is a legacy concept only relevant for HTML.
+    ///
+    /// Labels are listed at https://encoding.spec.whatwg.org/#names-and-labels
+    ///
+    /// This method is only available if the `query_encoding_2` or `query_encoding`
+    /// [feature](http://doc.crates.io/manifest.html#the-features-section]) is enabled.
+    #[cfg(any(feature = "query_encoding", feature = "query_encoding_2"))]
+    pub fn encoding_override_for_label(mut self, label: Option<&[u8]>) -> Self {
+        self.encoding_override = Rc::new(encoding_override_for_label(label).to_output_encoding());
         self
     }
 
