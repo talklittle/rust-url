@@ -115,6 +115,7 @@ pub extern crate idna;
 pub extern crate percent_encoding;
 
 use encoding::EncodingOverride;
+#[cfg(feature = "query_encoding")] use encoding::EncodingOverrideLegacy;
 #[cfg(feature = "heapsize")] use heapsize::HeapSizeOf;
 use host::HostInternal;
 use parser::{Parser, Context, SchemeType, to_u32, ViolationFn};
@@ -182,30 +183,17 @@ impl HeapSizeOf for Url {
 }
 
 /// Full configuration for the URL parser.
-#[derive(Copy, Clone)]
-pub struct ParseOptions<'a> {
+#[derive(Clone)]
+pub struct ParseOptions<'a, E: EncodingOverride> {
     base_url: Option<&'a Url>,
-    encoding_override: encoding::EncodingOverride,
+    encoding_override: E,
     violation_fn: ViolationFn<'a>,
 }
 
-impl<'a> ParseOptions<'a> {
+impl<'a, E: EncodingOverride> ParseOptions<'a, E> {
     /// Change the base URL
     pub fn base_url(mut self, new: Option<&'a Url>) -> Self {
         self.base_url = new;
-        self
-    }
-
-    /// Override the character encoding of query strings.
-    /// This is a legacy concept only relevant for HTML.
-    ///
-    /// `EncodingRef` is defined in [rust-encoding](https://github.com/lifthrasiir/rust-encoding).
-    ///
-    /// This method is only available if the `query_encoding`
-    /// [feature](http://doc.crates.io/manifest.html#the-features-section]) is enabled.
-    #[cfg(feature = "query_encoding")]
-    pub fn encoding_override(mut self, new: Option<encoding::EncodingRef>) -> Self {
-        self.encoding_override = EncodingOverride::from_opt_encoding(new).to_output_encoding();
         self
     }
 
@@ -265,7 +253,22 @@ impl<'a> ParseOptions<'a> {
     }
 }
 
-impl<'a> Debug for ParseOptions<'a> {
+#[cfg(feature = "query_encoding")]
+impl<'a> ParseOptions<'a, EncodingOverrideLegacy> {
+    /// Override the character encoding of query strings.
+    /// This is a legacy concept only relevant for HTML.
+    ///
+    /// `EncodingRef` is defined in [rust-encoding](https://github.com/lifthrasiir/rust-encoding).
+    ///
+    /// This method is only available if the `query_encoding`
+    /// [feature](http://doc.crates.io/manifest.html#the-features-section]) is enabled.
+    pub fn encoding_override(mut self, new: Option<encoding::EncodingRef>) -> Self {
+        self.encoding_override = EncodingOverrideLegacy::from_opt_encoding(new).to_output_encoding();
+        self
+    }
+}
+
+impl<'a, E: EncodingOverride> Debug for ParseOptions<'a, E> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f,
                "ParseOptions {{ base_url: {:?}, encoding_override: {:?}, \
@@ -398,7 +401,7 @@ impl Url {
     /// # }
     /// # run().unwrap();
     /// ```
-    pub fn options<'a>() -> ParseOptions<'a> {
+    pub fn options<'a, E: EncodingOverride>() -> ParseOptions<'a, E> {
         ParseOptions {
             base_url: None,
             encoding_override: EncodingOverride::utf8(),
@@ -1153,7 +1156,7 @@ impl Url {
     ///
 
     #[inline]
-    pub fn query_pairs(&self) -> form_urlencoded::Parse {
+    pub fn query_pairs<E: EncodingOverride>(&self) -> form_urlencoded::Parse<E> {
         form_urlencoded::parse(self.query().unwrap_or("").as_bytes())
     }
 
@@ -1196,7 +1199,10 @@ impl Url {
         })
     }
 
-    fn mutate<F: FnOnce(&mut Parser) -> R, R>(&mut self, f: F) -> R {
+    fn mutate<F, R, E>(&mut self, f: F) -> R
+            where F: FnOnce(&mut Parser<E>) -> R,
+                  E: EncodingOverride,
+    {
         let mut parser = Parser::for_setter(mem::replace(&mut self.serialization, String::new()));
         let result = f(&mut parser);
         self.serialization = parser.serialization;
@@ -1330,7 +1336,7 @@ impl Url {
     /// not `url.set_query(None)`.
     ///
     /// The state of `Url` is unspecified if this return value is leaked without being dropped.
-    pub fn query_pairs_mut(&mut self) -> form_urlencoded::Serializer<UrlQuery> {
+    pub fn query_pairs_mut<E: EncodingOverride>(&mut self) -> form_urlencoded::Serializer<UrlQuery, E> {
         let fragment = self.take_fragment();
 
         let query_start;

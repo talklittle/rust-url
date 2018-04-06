@@ -12,6 +12,7 @@
 
 extern crate encoding;
 
+use encoding::EncodingOverride;
 use encoding::utf8_helpers::{decode_utf8_lossy, encode_utf8};
 
 use std::borrow::Cow;
@@ -22,28 +23,30 @@ use self::encoding::label::encoding_from_whatwg_label;
 pub use self::encoding::types::EncodingRef;
 
 #[derive(Copy, Clone)]
-pub struct EncodingOverride {
+pub struct EncodingOverrideLegacy {
     /// `None` means UTF-8.
     encoding: Option<EncodingRef>
 }
 
-impl EncodingOverride {
+impl EncodingOverrideLegacy {
     pub fn from_opt_encoding(encoding: Option<EncodingRef>) -> Self {
         encoding.map(Self::from_encoding).unwrap_or_else(Self::utf8)
     }
 
     pub fn from_encoding(encoding: EncodingRef) -> Self {
-        EncodingOverride {
+        Self {
             encoding: if encoding.name() == "utf-8" { None } else { Some(encoding) }
         }
     }
+}
 
+impl EncodingOverride for EncodingOverrideLegacy {
     #[inline]
-    pub fn utf8() -> Self {
-        EncodingOverride { encoding: None }
+    fn utf8() -> Self {
+        Self { encoding: None }
     }
 
-    pub fn lookup(label: &[u8]) -> Option<Self> {
+    fn lookup(label: &[u8]) -> Option<Self> {
         // Don't use String::from_utf8_lossy since no encoding label contains U+FFFD
         // https://encoding.spec.whatwg.org/#names-and-labels
         ::std::str::from_utf8(label)
@@ -52,28 +55,18 @@ impl EncodingOverride {
         .map(Self::from_encoding)
     }
 
-    /// https://encoding.spec.whatwg.org/#get-an-output-encoding
-    pub fn to_output_encoding(self) -> Self {
-        if let Some(encoding) = self.encoding {
-            if matches!(encoding.name(), "utf-16le" | "utf-16be") {
-                return Self::utf8()
-            }
-        }
-        self
-    }
-
-    pub fn is_utf8(&self) -> bool {
+    fn is_utf8(&self) -> bool {
         self.encoding.is_none()
     }
 
-    pub fn name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         match self.encoding {
             Some(encoding) => encoding.name(),
             None => "utf-8",
         }
     }
 
-    pub fn decode<'a>(&self, input: Cow<'a, [u8]>) -> Cow<'a, str> {
+    fn decode<'a>(&self, input: Cow<'a, [u8]>) -> Cow<'a, str> {
         match self.encoding {
             // `encoding.decode` never returns `Err` when called with `DecoderTrap::Replace`
             Some(encoding) => encoding.decode(&input, DecoderTrap::Replace).unwrap().into(),
@@ -81,7 +74,7 @@ impl EncodingOverride {
         }
     }
 
-    pub fn encode<'a>(&self, input: Cow<'a, str>) -> Cow<'a, [u8]> {
+    fn encode<'a>(&self, input: Cow<'a, str>) -> Cow<'a, [u8]> {
         match self.encoding {
             // `encoding.encode` never returns `Err` when called with `EncoderTrap::NcrEscape`
             Some(encoding) => Cow::Owned(encoding.encode(&input, EncoderTrap::NcrEscape).unwrap()),
@@ -90,7 +83,7 @@ impl EncodingOverride {
     }
 }
 
-impl Debug for EncodingOverride {
+impl Debug for EncodingOverrideLegacy {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "EncodingOverride {{ encoding: ")?;
         match self.encoding {

@@ -11,23 +11,44 @@
 //! Used when building without any query encoding feature flags.
 
 use std::borrow::Cow;
+use std::fmt::{self, Debug, Formatter};
 
+use encoding::EncodingOverride;
 use encoding::utf8_helpers::{decode_utf8_lossy, encode_utf8};
 
 #[derive(Copy, Clone, Debug)]
-pub struct EncodingOverride;
+pub struct EncodingOverrideFallback;
 
-impl EncodingOverride {
+impl EncodingOverrideFallback {
     #[inline]
     pub fn utf8() -> Self {
-        EncodingOverride
+        EncodingOverrideFallback
+    }
+}
+
+impl EncodingOverride for EncodingOverrideFallback {
+    fn utf8() -> Self {
+        Self {}
     }
 
-    pub fn decode<'a>(&self, input: Cow<'a, [u8]>) -> Cow<'a, str> {
+    fn lookup(label: &[u8]) -> Option<Self> {
+        // always return `None` which means UTF-8
+        None
+    }
+
+    fn is_utf8(&self) -> bool {
+        true
+    }
+
+    fn name(&self) -> &'static str {
+        "utf-8"
+    }
+
+    fn decode<'a>(&self, input: Cow<'a, [u8]>) -> Cow<'a, str> {
         decode_utf8_lossy(input)
     }
 
-    pub fn encode<'a>(&self, input: Cow<'a, str>) -> Cow<'a, [u8]> {
+    fn encode<'a>(&self, input: Cow<'a, str>) -> Cow<'a, [u8]> {
         encode_utf8(input)
     }
 }

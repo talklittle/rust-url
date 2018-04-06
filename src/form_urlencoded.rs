@@ -28,7 +28,7 @@ use std::str;
 /// The names and values are percent-decoded. For instance, `%23first=%25try%25` will be
 /// converted to `[("#first", "%try%")]`.
 #[inline]
-pub fn parse(input: &[u8]) -> Parse {
+pub fn parse<E: EncodingOverride>(input: &[u8]) -> Parse<E> {
     Parse {
         input: input,
         encoding: EncodingOverride::utf8(),
@@ -54,7 +54,7 @@ pub fn parse(input: &[u8]) -> Parse {
 pub fn parse_with_encoding<'a>(input: &'a [u8],
                                encoding_override: Option<::encoding::EncodingRef>,
                                use_charset: bool)
-                               -> Result<Parse<'a>, ()> {
+                               -> Result<Parse<'a, ::encoding::EncodingOverrideLegacy>, ()> {
     use std::ascii::AsciiExt;
 
     let mut encoding = EncodingOverride::from_opt_encoding(encoding_override);
@@ -82,13 +82,13 @@ pub fn parse_with_encoding<'a>(input: &'a [u8],
 }
 
 /// The return type of `parse()`.
-#[derive(Copy, Clone, Debug)]
-pub struct Parse<'a> {
+#[derive(Clone, Debug)]
+pub struct Parse<'a, E: EncodingOverride> {
     input: &'a [u8],
-    encoding: EncodingOverride,
+    encoding: E,
 }
 
-impl<'a> Iterator for Parse<'a> {
+impl<'a, E: EncodingOverride> Iterator for Parse<'a, E> {
     type Item = (Cow<'a, str>, Cow<'a, str>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -113,7 +113,7 @@ impl<'a> Iterator for Parse<'a> {
     }
 }
 
-fn decode(input: &[u8], encoding: EncodingOverride) -> Cow<str> {
+fn decode<E: EncodingOverride>(input: &[u8], encoding: E) -> Cow<str> {
     let replaced = replace_plus(input);
     encoding.decode(match percent_decode(&replaced).if_any() {
         Some(vec) => Cow::Owned(vec),
@@ -138,20 +138,20 @@ fn replace_plus(input: &[u8]) -> Cow<[u8]> {
     }
 }
 
-impl<'a> Parse<'a> {
+impl<'a, E: EncodingOverride> Parse<'a, E> {
     /// Return a new iterator that yields pairs of `String` instead of pairs of `Cow<str>`.
-    pub fn into_owned(self) -> ParseIntoOwned<'a> {
+    pub fn into_owned(self) -> ParseIntoOwned<'a, E> {
         ParseIntoOwned { inner: self }
     }
 }
 
 /// Like `Parse`, but yields pairs of `String` instead of pairs of `Cow<str>`.
 #[derive(Debug)]
-pub struct ParseIntoOwned<'a> {
-    inner: Parse<'a>
+pub struct ParseIntoOwned<'a, E: EncodingOverride> {
+    inner: Parse<'a, E>
 }
 
-impl<'a> Iterator for ParseIntoOwned<'a> {
+impl<'a, E: EncodingOverride> Iterator for ParseIntoOwned<'a, E> {
     type Item = (String, String);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -213,10 +213,10 @@ impl<'a> Iterator for ByteSerialize<'a> {
 /// The [`application/x-www-form-urlencoded` serializer](
 /// https://url.spec.whatwg.org/#concept-urlencoded-serializer).
 #[derive(Debug)]
-pub struct Serializer<T: Target> {
+pub struct Serializer<T: Target, E: EncodingOverride> {
     target: Option<T>,
     start_position: usize,
-    encoding: EncodingOverride,
+    encoding: E,
     custom_encoding: Option<SilentDebug<Box<FnMut(&str) -> Cow<[u8]>>>>,
 }
 
@@ -262,7 +262,7 @@ impl<'a> Target for ::UrlQuery<'a> {
     type Finished = &'a mut ::Url;
 }
 
-impl<T: Target> Serializer<T> {
+impl<T: Target, E: EncodingOverride> Serializer<T, E> {
     /// Create a new `application/x-www-form-urlencoded` serializer for the given target.
     ///
     /// If the target is non-empty,
@@ -383,16 +383,16 @@ fn string<T: Target>(target: &mut Option<T>) -> &mut String {
     target.as_mut().expect("url::form_urlencoded::Serializer finished").as_mut_string()
 }
 
-fn append_pair(string: &mut String, start_position: usize, encoding: EncodingOverride,
-               custom_encoding: &mut Option<SilentDebug<Box<FnMut(&str) -> Cow<[u8]>>>>,
-               name: &str, value: &str) {
+fn append_pair<E: EncodingOverride>(string: &mut String, start_position: usize, encoding: E,
+            custom_encoding: &mut Option<SilentDebug<Box<FnMut(&str) -> Cow<[u8]>>>>,
+            name: &str, value: &str) {
     append_separator_if_needed(string, start_position);
     append_encoded(name, string, encoding, custom_encoding);
     string.push('=');
     append_encoded(value, string, encoding, custom_encoding);
 }
 
-fn append_encoded(s: &str, string: &mut String, encoding: EncodingOverride,
+fn append_encoded<E: EncodingOverride>(s: &str, string: &mut String, encoding: E,
                custom_encoding: &mut Option<SilentDebug<Box<FnMut(&str) -> Cow<[u8]>>>>) {
     let bytes = if let Some(SilentDebug(ref mut custom)) = *custom_encoding {
         custom(s)

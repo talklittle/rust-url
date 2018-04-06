@@ -312,10 +312,10 @@ impl<'a> fmt::Debug for ViolationFn<'a> {
     }
 }
 
-pub struct Parser<'a> {
+pub struct Parser<'a, E: EncodingOverride> {
     pub serialization: String,
     pub base_url: Option<&'a Url>,
-    pub query_encoding_override: EncodingOverride,
+    pub query_encoding_override: E,
     pub violation_fn: ViolationFn<'a>,
     pub context: Context,
 }
@@ -327,12 +327,12 @@ pub enum Context {
     PathSegmentSetter,
 }
 
-impl<'a> Parser<'a> {
-    pub fn for_setter(serialization: String) -> Parser<'a> {
+impl<'a, E: EncodingOverride> Parser<'a, E> {
+    pub fn for_setter(serialization: String) -> Parser<'a, E> {
         Parser {
             serialization: serialization,
             base_url: None,
-            query_encoding_override: EncodingOverride::utf8(),
+            query_encoding_override: E::utf8(),
             violation_fn: ViolationFn::NoOp,
             context: Context::Setter,
         }

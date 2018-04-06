@@ -12,12 +12,44 @@
 
 mod utf8_helpers;
 
-#[cfg(feature = "query_encoding")]
-mod legacy;
-#[cfg(feature = "query_encoding")]
-pub use self::legacy::{EncodingOverride, EncodingRef};
+use std::borrow::Cow;
+use std::fmt::Debug;
 
-#[cfg(not(feature = "query_encoding"))]
-mod fallback;
-#[cfg(not(feature = "query_encoding"))]
-pub use self::fallback::EncodingOverride;
+#[cfg(feature = "query_encoding")] mod legacy;
+#[cfg(feature = "query_encoding")] pub use self::legacy::{EncodingOverrideLegacy, EncodingRef};
+
+#[cfg(not(feature = "query_encoding"))] mod fallback;
+#[cfg(not(feature = "query_encoding"))] use self::fallback::EncodingOverrideFallback;
+
+pub trait EncodingOverride : Clone + Debug {
+    /// Get an Encoding representing UTF-8.
+    fn utf8() -> Self;
+
+    /// Look up an Encoding using the WHATWG label,
+    /// listed at https://encoding.spec.whatwg.org/#names-and-labels
+    fn lookup(label: &[u8]) -> Option<Self>;
+
+    /// Whether this Encoding represents UTF-8.
+    fn is_utf8(&self) -> bool;
+
+    /// Get the name of this Encoding, which when ASCII lowercased, may be used as a
+    /// lookup label. https://encoding.spec.whatwg.org/#names-and-labels
+    fn name(&self) -> &'static str;
+
+    /// https://encoding.spec.whatwg.org/#get-an-output-encoding
+    fn to_output_encoding(self) -> Self {
+        if !self.is_utf8() {
+            let lowercased = self.name().to_lowercase();
+            if lowercased == "utf-16le" || lowercased == "utf-16be" {
+                return Self::utf8()
+            }
+        }
+        self
+    }
+
+    /// Decode the specified bytes in the current encoding, to UTF-8.
+    fn decode<'a>(&self, input: Cow<'a, [u8]>) -> Cow<'a, str>;
+
+    /// Encode the UTF-8 string to the current encoding.
+    fn encode<'a>(&self, input: Cow<'a, str>) -> Cow<'a, [u8]>;
+}
