@@ -21,13 +21,13 @@ use std::fmt::Debug;
 #[cfg(not(feature = "query_encoding"))] mod fallback;
 #[cfg(not(feature = "query_encoding"))] use self::fallback::EncodingOverrideFallback;
 
-pub trait EncodingOverride : Clone + Debug {
+pub trait EncodingOverride : Debug {
     /// Get an Encoding representing UTF-8.
-    fn utf8() -> Self;
+    fn utf8() -> Self where Self: Sized;
 
     /// Look up an Encoding using the WHATWG label,
     /// listed at https://encoding.spec.whatwg.org/#names-and-labels
-    fn lookup(label: &[u8]) -> Option<Self>;
+    fn lookup(label: &[u8]) -> Option<Self> where Self: Sized;
 
     /// Whether this Encoding represents UTF-8.
     fn is_utf8(&self) -> bool;
@@ -37,7 +37,7 @@ pub trait EncodingOverride : Clone + Debug {
     fn name(&self) -> &'static str;
 
     /// https://encoding.spec.whatwg.org/#get-an-output-encoding
-    fn to_output_encoding(self) -> Self {
+    fn to_output_encoding(self) -> Self where Self: Sized {
         if !self.is_utf8() {
             let lowercased = self.name().to_lowercase();
             if lowercased == "utf-16le" || lowercased == "utf-16be" {
@@ -52,4 +52,14 @@ pub trait EncodingOverride : Clone + Debug {
 
     /// Encode the UTF-8 string to the current encoding.
     fn encode<'a>(&self, input: Cow<'a, str>) -> Cow<'a, [u8]>;
+}
+
+#[cfg(feature = "query_encoding")]
+pub fn default_encoding_override() -> EncodingOverrideLegacy {
+    EncodingOverrideLegacy::utf8()
+}
+
+#[cfg(not(feature = "query_encoding"))]
+pub fn default_encoding_override() -> EncodingOverrideFallback {
+    EncodingOverrideFallback::utf8()
 }

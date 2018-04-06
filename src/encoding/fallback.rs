@@ -11,7 +11,6 @@
 //! Used when building without any query encoding feature flags.
 
 use std::borrow::Cow;
-use std::fmt::{self, Debug, Formatter};
 
 use encoding::EncodingOverride;
 use encoding::utf8_helpers::{decode_utf8_lossy, encode_utf8};
